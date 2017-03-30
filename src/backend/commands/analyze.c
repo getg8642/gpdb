@@ -62,6 +62,16 @@
  */
 #define WIDTH_THRESHOLD  1024
 
+/* User Defined Type Starting Oid */
+#define UDT_START_OID 10000
+
+/* Enum representing if the column value exceeded WIDTH THRESHOLD */
+typedef enum
+{
+	WIDTH_THRESHOLD_EXCEEDED,
+	WIDTH_THRESHOLD_NOT_EXCEEDED
+} WidthThreshold;
+
 /* Data structure for Algorithm S from Knuth 3.4.2 */
 typedef struct
 {
@@ -1422,11 +1432,13 @@ acquire_sample_rows_by_query(Relation onerel, int nattrs, VacAttrStats **attrsta
 								 quote_identifier(NameStr(attname)),
 								 quote_identifier(NameStr(attname)));
 				appendStringInfo(&columnStr,
-								 "(case when Ta.%s is NULL then 1 else 2 end)",
-								 quote_identifier(NameStr(attname)));
+								 "(case when Ta.%s is NULL then %d else %d end)",
+								 quote_identifier(NameStr(attname)),
+								 WIDTH_THRESHOLD_NOT_EXCEEDED,
+								 WIDTH_THRESHOLD_EXCEEDED);
 				isVarlenaCol[i] = true;
 			}
-			else if (atttypid > 10000)
+			else if (atttypid > UDT_START_OID)
 			{
 				HeapTuple typtuple = SearchSysCacheCopy(TYPEOID,
 														ObjectIdGetDatum(atttypid),
@@ -1570,7 +1582,7 @@ acquire_sample_rows_by_query(Relation onerel, int nattrs, VacAttrStats **attrsta
 												  &dummyNull);
 
 					/* If Datum is too large, set stats_valid to false to ensure no stats are collected on it */
-					if (DatumGetInt32(dummyVal) == 2)
+					if (DatumGetInt32(dummyVal) == WIDTH_THRESHOLD_EXCEEDED)
 					{
 						colLargeRowIndexes[j].rows = lappend_int(colLargeRowIndexes[j].rows, i);
 					}
